@@ -141,3 +141,9 @@ gems:
   - jekyll-mentions
   - jekyll-sitemap
   - jekyll-feed
+
+title: prince
+description: Pages
+google_analytics: 
+show_downloads: true
+theme: jekyll-theme-minimal
