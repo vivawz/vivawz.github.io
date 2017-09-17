@@ -1,0 +1,782 @@
+<p>Redis<span style="font-family:宋体,SimSun">（</span>Remote Dictionary Server<span style="font-family:宋体,SimSun">）是一种开源的高效</span>key-value<span style="font-family:宋体,SimSun">存储系统，作者是</span>Salvatore Sanfilippo<span style="font-family:宋体,SimSun">。</span></p>
+
+<p><span style="font-family:宋体,SimSun">使用</span>C<span style="font-family:宋体,SimSun">语言编写，遵循</span>BSD<span style="font-family:宋体,SimSun">协议。通常作为数据库、缓存和消息代理使用。</span>Redis<span style="font-family:宋体,SimSun">支持的存储数据结构包括</span>string<span style="font-family:宋体,SimSun">、</span>hash map<span style="font-family:宋体,SimSun">、</span>list<span style="font-family:宋体,SimSun">、</span>set<span style="font-family:宋体,SimSun">、</span>bitmap<span style="font-family:宋体,SimSun">、</span>hyperloglogs<span style="font-family:宋体,SimSun">和</span>geospatial indexes<span style="font-family:宋体,SimSun">。</span>Redis<span style="font-family:宋体,SimSun">有内建的主备机制、</span>LRU<span style="font-family:宋体,SimSun">机制、事务处理、持久化、集群方式、发布</span>/<span style="font-family:宋体,SimSun">订阅机制。以提供高效的，适用于多种场景的应用。</span></p>
+
+<p>Redis<span style="font-family:宋体,SimSun">的官网：</span><span style="color:#0000ff"><u><a href="https://redis.io/">https://redis.io/</a></u></span> <span style="font-family:宋体,SimSun">，官网中文翻译网址：</span><span style="color:#0000ff"><u><a href="http://www.redis.cn/">http://www.redis.cn/</a></u></span></p>
+
+<p><span style="font-family:宋体,SimSun">本系列主要从源码入手，分析</span>Redis<span style="font-family:宋体,SimSun">的设计和实现，使用的</span>Redis<span style="font-family:宋体,SimSun">版本是</span>3.2.9</p>
+
+<p>Redis<span style="font-family:宋体,SimSun">的源码结构非常清晰，每个文件包含了单独的功能。从源码结构入手有助于理清</span>Redis<span style="font-family:宋体,SimSun">的逻辑。先列出源码的结构以供参考</span></p>
+
+<table border="1" cellpadding="5" cellspacing="1">
+	<tbody>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">分类</span></span><span style="font-family:宋体,SimSun"><span style="font-size:small">1</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">分类</span></span><span style="font-family:宋体,SimSun"><span style="font-size:small">2</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">分类</span></span><span style="font-family:宋体,SimSun"><span style="font-size:small">3</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">头文件</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">C</span></span><span style="font-family:宋体,SimSun"><span style="font-size:small">文件</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td rowspan="37">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">基础封装</span></span></p>
+			</td>
+			<td rowspan="3">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">内存管理</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">sdsalloc.h</span></span></p>
+			</td>
+			<td>
+			<h2 style="font-style:italic"><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></h2>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">zmalloc.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">zmalloc.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">memtest.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td rowspan="8">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">数据结构</span></span></p>
+			</td>
+			<td rowspan="4">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">sds.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">sds.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">adlist.h </span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">adlist.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">dict.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">dict.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">quicklist.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">quicklist.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td rowspan="4">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">ziplist.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">ziplist.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">zipmap.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">zipmap.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">intset.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">intset.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">object.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td rowspan="7">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">网络</span></span></p>
+			</td>
+			<td rowspan="7">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">事件驱动模型</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">ae.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">ae.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">ae_evport.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">ae_epoll.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">ae_kqueue.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">ae_select.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">anet.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">anet.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">syncio.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td rowspan="10">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">工具</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">util.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">util.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">endianconv.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">endianconv.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">rand.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">rand.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">sha1.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">sha1.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td rowspan="2">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">冗余校验</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">crc16.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">crc64.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">crc64.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td rowspan="2">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">压缩</span></span><span style="font-family:宋体,SimSun"><span style="font-size:small">/</span></span><span style="font-family:宋体,SimSun"><span style="font-size:small">解压缩</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">lzf.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">lzf_c.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">lzfP.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">lzf_d.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">networking.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">pqsort.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">pqsort.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td rowspan="9">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">其他</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">debugmacro.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">fmacros.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">help.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">testhelp.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">version.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">redisassert.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">solarisfixes.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">asciilogo.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">debug.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td rowspan="31">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">实现</span></span></p>
+			</td>
+			<td rowspan="5">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">进程</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">redis-benchmark.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">redis-check-aof.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">redis-check-rdb.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">redis-cli.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">server.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">server.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td rowspan="11">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">命令</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">db.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">bitops.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">t_hash.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">t_list.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">t_set.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">t_string.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">t_zset.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">sort.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">geo.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">geo.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">multi.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">hyperloglog.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td rowspan="3">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">文件</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">rdb.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">rdb.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">bio.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">bio.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">rio.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">rio.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td rowspan="4">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">多机</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">集群</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">cluster.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">cluster.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">主从</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">replication.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">sentinel.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">latency.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">latency.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td rowspan="8">
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">其他</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">通知</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">notify.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">发布订阅</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">pubsub.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">慢查询日志</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">slowlog.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">slowlog.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">blocked.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">配置</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">config.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">config.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">封装脚本</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">scripting.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">sparkline.h</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">sparkline.c</span></span></p>
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">　</span></span></p>
+			</td>
+			<td>
+			<p><span style="font-family:宋体,SimSun"><span style="font-size:small">setproctitle.c</span></span></p>
+			</td>
+		</tr>
+	</tbody>
+</table>
+
+<p>&nbsp;</p>
+
+<p><span style="font-family:宋体,SimSun">简单说明：</span></p>
+
+<p><span style="font-family:宋体,SimSun">基础封装：包括封装了专用的内存管理器、</span>Redis<span style="font-family:宋体,SimSun">数据结构（包括</span>string<span style="font-family:宋体,SimSun">、</span>list<span style="font-family:宋体,SimSun">、</span>map<span style="font-family:宋体,SimSun">、</span>set<span style="font-family:宋体,SimSun">等）、网络库和一些基础工具。</span></p>
+
+<p>Redis<span style="font-family:宋体,SimSun">实现：包括</span>Redis<span style="font-family:宋体,SimSun">命令，本地化、集群和一些其他功能。</span></p>
+
