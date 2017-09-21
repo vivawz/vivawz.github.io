@@ -1,0 +1,94 @@
+---
+layout : post
+title : (二) Redis的数据结构一
+descriptoin : Redis,源码
+category : Redis
+tags : [Redis, 源码, Linux,]
+---
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; C<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">语言没有提供像</span></span>map<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">、</span></span>set<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">、</span></span>list<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">等复杂的数据结构，虽然提供了</span></span>string<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">类型</span></span>char*<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">，<span style="font-family:Calibri,sans-serif"> </span>但是但是效率比较差（主要表现在申请和释放空间上）。因此</span></span>Redis<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">封装了这些数据结构，当然在封装的时候使用了很巧妙的设计，能够最大化的优化时间和空间复杂度。</span></span>Redis<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">的性能能够如此优秀，可以说这些数据结构是基石。</span></span></p>
+
+<p style="text-align:center"><span style="font-size:26px"><strong><span style="font-family:WenQuanYi Micro Hei">(一) 字符串类型</span>sds</strong></span></p>
+
+<p><span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">在</span></span>sds.h<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">中定义了</span></span>sds:</p>
+
+<p>typedef char *sds;</p>
+
+<p><span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">可以看到</span></span>sds<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">其实就是</span></span>char*<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">类型，我们来看，</span></span>sds<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">做了怎样的设计，来提高使用时的性能。</span></span></p>
+
+<p>&nbsp;</p>
+
+<p>sds<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">的结构如下：</span></span></p>
+
+<p><img alt="" src="{{ BASE_PATH }}/pics/redis/sds.png" /></p>
+
+<p>len<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">：字符串的长度</span></span></p>
+
+<p>alloc<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">：总空间的大小</span></span></p>
+
+<p>flag<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">：字符串的类型</span></span></p>
+
+<p>sds<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">：存放字符串的空间</span></span></p>
+
+<p>\0<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">：末尾的<span style="font-family:Calibri,sans-serif">&rsquo;</span></span></span>\0&rsquo;<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">可以防止越界访问</span></span></p>
+
+<p>sds<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">的设计思路是，预分配一定量的空间，再使用一个</span></span>len<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">表示已使用的空间大小，这样可以准确的访问内容，减少操作时的内存申请或释放。同时提供不同空间范围的字符串类型，使空间的使用更合理，减少空间浪费。</span></span></p>
+
+<p><span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">类型根据字符串长度（初次申请时）确定，类型及长度如下：</span></span></p>
+
+<p>SDS_TYPE_5 [0, 1&lt;&lt;5)</p>
+
+<p>SDS_TYPE_8 [1&lt;&lt;5, 1&lt;&lt;8)</p>
+
+<p>SDS_TYPE_16 [1&lt;&lt;8, 1&lt;&lt;16)</p>
+
+<p>SDS_TYPE_32 [1&lt;&lt;16, 1&lt;&lt;32)</p>
+
+<p>SDS_TYPE_64 [1&lt;&lt;32, max(uint64_t))</p>
+
+<p><span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">定义这</span></span>5<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">种类型，使用</span></span>3bits<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">就可以表示，所以在实现时使用了</span></span>1byte<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">。</span></span></p>
+
+<p><span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">每种类型定义了一个</span></span>struct<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">，例如</span></span>SDS_TYPE_8<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">类型定义：</span></span></p>
+
+<pre>
+<code class="language-cpp">struct __attribute__ ((__packed__)) sdshdr8 {
+
+  uint8_t len;
+
+  uint8_t alloc;
+
+  unsigned char flags;
+
+  char buf[];
+
+};</code></pre>
+
+<p><span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">在申请一个</span></span>SDS_TYPE_8<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">类型的</span></span>sds<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">时，实际上申请的空间大小是<span style="font-family:Calibri,sans-serif"> </span></span></span>sizeof(struct(sdshdr8)) + len(str)+1<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">，即包含了头和尾，而</span></span>sds<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">指向的地址是申请空间首地址</span></span>+sizeof(struct(sdshdr8))<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">，这样做的好处是访问</span></span>sds<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">的</span></span>[0,len)<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">时就是我们需要的字符串内容，要获取</span></span>sds<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">的头信息也很方便，我们经常在代码里看到的</span></span>sds[-1]<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">即</span></span>sdshdr8<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">中的</span></span>flags<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">，</span></span>SDS_HDR(8,sds)-&gt;len<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">就可以直接读取</span></span>len<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">字段，实际上是在内存中向后移动了一个</span></span>sdshrd8<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">的距离就可以完成直接读写。需要注意的是，</span></span>alloc<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">的值是不包括头和尾的，指的是能保存的字符串的空间。</span></span></p>
+
+<p><span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">考虑一个使用场景：有</span></span>sds a<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">和</span></span>sds b<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">两个遍历，需要把</span></span>b<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">拼接到</span></span>a<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">后面。如果</span></span>a<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">的剩余空间大于</span></span>b<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">的长度（</span></span>a(alloc-len) &gt; len(b)<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">），这时只需要将</span></span>b<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">的内容拷贝到</span></span>a<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">后，再更新</span></span>a<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">的</span></span>len<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">字段即可，这也是预申请空间的好处。但是当空间不够时就需要申请更多空间。</span></span>sds<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">申请新空间的做法是：</span></span></p>
+
+<ol>
+	<li>
+	<p><span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">确定空间大小</span></span></p>
+	</li>
+	<li>
+	<p><span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">根据空间大小确定</span></span>sds<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">类型</span></span></p>
+	</li>
+	<li>
+	<p><span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">如果类型不变，使用</span></span>realloc<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">直接申请所需空间</span></span></p>
+	</li>
+	<li>
+	<p><span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">如果类型改变，使用</span></span>malloc<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">申请一段空间，计算新的</span></span>sds[0]<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">的位置，将原</span></span>sds<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">内容拷贝至新地址，释放原空间</span></span></p>
+	</li>
+</ol>
+
+<p><span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">说明：</span></span></p>
+
+<ol>
+	<li>
+	<p><span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">新空间大小的计算<span style="font-family:Calibri,sans-serif"> </span>新空间</span></span>=<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">字符串长度</span></span>+<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">新增长度，如果新空间</span></span>&lt;1M<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">，新空间再乘</span></span>2<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">，否则新空间</span></span>+1M</p>
+	</li>
+	<li>
+	<p><span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">类型改变时并没有使用</span></span>realloc<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">，而是申请了新的空间并用</span></span>memcpy<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">进行了内容拷贝。这样做是因为不同类型的</span></span>sdshdr<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">的大小并不一样，</span></span>sds[0]<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">相对空间的偏移量也不一样。如果使用</span></span>realloc<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">，就会使用类似</span></span>strcpy<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">的函数从尾到头进行逐个字符拷贝来达到移位的目的，但是实际上因为</span></span>memcpy<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">采用了</span></span>page copy<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">和</span></span>word copy<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">等优化策略，效率比</span></span>stcpy<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">要好很多，使用这种方式效率更高。由此也可以看出作者在设计时对细节的优化很到位。</span></span></p>
+	</li>
+</ol>
+
