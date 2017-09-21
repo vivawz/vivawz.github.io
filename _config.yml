@@ -85,7 +85,7 @@ JB :
   #
   comments :
     provider : disqus
-    disqus : vivawz
+    disqus : 
       short_name : 
     livefyre :
       site_id : 
