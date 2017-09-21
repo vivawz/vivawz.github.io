@@ -6,6 +6,7 @@ category : Redis
 tags : [Redis, 源码, Linux,]
 ---
 <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; C<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">语言没有提供像</span></span>map<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">、</span></span>set<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">、</span></span>list<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">等复杂的数据结构，虽然提供了</span></span>string<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">类型</span></span>char*<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">，<span style="font-family:Calibri,sans-serif"> </span>但是但是效率比较差（主要表现在申请和释放空间上）。因此</span></span>Redis<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">封装了这些数据结构，当然在封装的时候使用了很巧妙的设计，能够最大化的优化时间和空间复杂度。</span></span>Redis<span style="font-family:WenQuanYi Micro Hei"><span style="font-size:small">的性能能够如此优秀，可以说这些数据结构是基石。</span></span></p>
+<!--more-->
 
 <p style="text-align:center"><span style="font-size:26px"><strong><span style="font-family:WenQuanYi Micro Hei">(一) 字符串类型</span>sds</strong></span></p>
 
