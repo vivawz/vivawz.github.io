@@ -1,0 +1,47 @@
+---
+layout : post
+title : (三) Redis的数据结构-链表
+descriptoin : Redis,源码
+category : Redis
+tags : [Redis, 源码, Linux,]
+---
+<p>Redis中定义三种链表：list、ziplist和quicklist以满足不同使用场景<br />
+<!--more-->
+一、&nbsp;&nbsp; &nbsp;list<br />
+从listNode的定义可以看出，list定义了前驱指针和后驱指针，是一个双向链表。<br />
+list的struct定义中有三个函数指针，作用分别是：<br />
+dup&nbsp; 设置拷贝节点的函数<br />
+free&nbsp; 设置删除节点的函数<br />
+match 设置判断节点是否匹配的函数<br />
+提供的方法：创建、删除、在头或尾添加节点、按节点或索引查找、插入和删除节点、遍历、拷贝链表、链表翻转等。<br />
+二、&nbsp;&nbsp; &nbsp;ziplist<br />
+ziplist是一种经过编码来优化内存使用的双向链表。可以存储string和整型，可在头尾进行插入删除操作</p>
+
+<p>结构如下：</p>
+
+<p><img alt="" src="{{ BASE_PATH }}/pics/redis/ziplist.png" /><br />
+zlbytes 占用空间总大小<br />
+zltail&nbsp;&nbsp; 最后一个entry的偏移量<br />
+zllen&nbsp;&nbsp; entry的数量<br />
+zlend&nbsp; 1B-ZIP_END</p>
+
+<p>pre_entry_len 1B或5B组成，如果前驱元素长度小于254，用1Byte表示其长度；如果大于等于254，用5Bytes表示，其中第一Byte设置为254，剩余4Bytes为长度值<br />
+encoding和len是组合在一起的，encoding采用1Byte表示，当encoding的最高2bits小于二进制11时，表示此entry中保存的是字符串类型，剩余6bits可以表示长度。规则是：<br />
+|00pppppp| 此时的len只有6bits，可以保存最大63 bytes<br />
+|01pppppp|qqqqqqqq| 14bites，最大保存16383 bytes<br />
+|10_______|x|x|x|x|，表示保存了大于16383 bytes的字符串<br />
+encoding的最高两位是11时，表示保存了整型数据，规则：<br />
+|11000000|表示int16_t(2 bytes)<br />
+|11010000|表示int32_t(4 bytes)<br />
+|11100000|表示int64_t(8 bytes)<br />
+|11110000|表示3 bytes 有符号整型<br />
+|11111110|表示1 bytes 有符号整型<br />
+|1111xxxx| 此时用xxxx表示4 bits无符号整型，因为0000和1110已经被占用，所以能表示的数为[0001,1101]，即[1,13]<br />
+表示整型时，不需要len，无符号值更不需要conent<br />
+ziplist的一个问题：连锁更新<br />
+ziplist申请了一段连续的空间用来保存链表的所有信息，因此在增、删、改操作时，会造成后继节点的移动，而且因为pre_entry_len采用了变长编码的方式，可能引起后继节点的头部长度发生变化，也会造成节点移动。一旦一个节点发生移动，它的后继节点也会跟着移动，发生连锁反应。<br />
+三、&nbsp;&nbsp; &nbsp;quicklist<br />
+quicklist也是一个双向链表，是将adlist和ziplist结合起来：quicklist的每个节点都是一个ziplist，quicklist的每个节点之间使用双向指针的方式连接。是在时间和空间复杂度上取了一个折中的方案。<br />
+其中的ziplist的大小是一个可以通过配置项list-max-ziplist-size进行设置的值，这个值是整数时表示ziplist中元素的个数，是负数时表示空间大小，值为2^(x+1) Kb，x取值[-5, -1]。<br />
+quicklist还提供了一个设置选项list-compress-depth来压缩中间部分的元素来节约空间，例如值为1时表示头尾1个节点不压缩，其余节点压缩。压缩算法采用了LZF</p>
+
