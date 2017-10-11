@@ -1,0 +1,27 @@
+---
+layout : post
+title : (四) 整数集合-intset
+descriptoin : Redis,源码
+category : Redis
+tags : [Redis, 源码, Linux,]
+---
+intset是一个整数集合，集合中没有重复的元素，且元素从小到大排列，因为内容有序，所以在查找时可以使用二分法。<br />
+<!--more-->
+定义如下：<br />
+&nbsp;</p>
+
+<pre>
+<code class="language-cpp">typedef struct intset {
+uint32_t encoding;
+uint32_t length;
+int8_t contents[];
+} intset;</code></pre>
+
+<p>由三个字段构成，分别为编码类型、长度和内容。<br />
+编码类型：intset可以存储int16_t、int32_t或int64_t。由定义可以看出，一个intset只有一种编码类型，即其中存储的整数的编码类型是一样的。编码类型是自动确定的，当向intset中插入一个元素时，先检查这个元素的大小用intset的编码类型能否表示，如果能则直接插入即可；如果不能，需要先升级intset的编码类型，重新分配空间放置原有元素，并把需要插入的元素放到适当的位置。<br />
+长度：即intset中的元素个数，在插入和删除时，长度发生变化，且需要重新分配空间来保证分配的空间刚好表示全部元素。因此可以看到intset只有一个length来表示大小，不需要其他值表示空间大小或剩余空间大小。<br />
+内容：虽然定义成int8_t型，但是实际编码类型需要从encoding读取<br />
+另外，编码类型是自动确定的，且只在插入的时候判定，删除元素时并无判定，这就意味着编码类型只能升级而无降级</p>
+
+<p>&nbsp;</p>
+
