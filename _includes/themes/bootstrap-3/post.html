@@ -45,3 +45,17 @@
     {% include JB/comments %}
   </div>
 </div>
+<div id="container"></div>
+<link rel="stylesheet" href="https://imsun.github.io/gitment/style/default.css">
+<script src="https://imsun.github.io/gitment/dist/gitment.browser.js"></script>
+<script>
+var gitment = new Gitment({
+  owner: 'vivawz',
+  repo: 'vivawz.github.io',
+  oauth: {
+    client_id: 'b52ae21833162ae4e515',
+    client_secret: '85e95bd224c48382031aa7e4fe16ff049e3c8727',
+  },
+})
+gitment.render('container')
+</script>
