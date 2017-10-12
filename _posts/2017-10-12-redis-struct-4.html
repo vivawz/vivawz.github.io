@@ -1,0 +1,91 @@
+---
+layout : post
+title : (五) Redis的数据结构-dict
+descriptoin : Redis,源码
+category : Redis
+tags : [Redis, 源码, Linux,]
+---
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; dict<span style="font-family:宋体,SimSun">是一个</span>key-value<span style="font-family:宋体,SimSun">存储的</span>hash map<span style="font-family:宋体,SimSun">，实际上</span>redis<span style="font-family:宋体,SimSun">对外提供的</span>key-value<span style="font-family:宋体,SimSun">服务的底层数据结构就是</span>dict<span style="font-family:宋体,SimSun">。</span>hash map<span style="font-family:宋体,SimSun">由一个</span>hash<span style="font-family:宋体,SimSun">算法来确定数据的在数组中的放置位置，</span>dict<span style="font-family:宋体,SimSun">使用开链法解决冲突。</span></p>
+<!--more-->
+<p>dict<span style="font-family:宋体,SimSun">的数据结构：</span></p>
+
+<pre>
+<code class="language-cpp">typedef struct dictEntry {
+    void *key;
+    union {
+        void *val;
+        uint64_t u64;
+        int64_t s64;
+        double d;
+    } v;
+    struct dictEntry *next;
+} dictEntry;
+
+typedef struct dictType {
+    unsigned int (*hashFunction)(const void *key);
+    void *(*keyDup)(void *privdata, const void *key);
+    void *(*valDup)(void *privdata, const void *obj);
+    int (*keyCompare)(void *privdata, const void *key1, const void *key2);
+    void (*keyDestructor)(void *privdata, void *key);
+    void (*valDestructor)(void *privdata, void *obj);
+} dictType;
+
+typedef struct dictht {
+    dictEntry **table;
+    unsigned long size;
+    unsigned long sizemask;
+    unsigned long used;
+} dictht;
+
+typedef struct dict {
+    dictType *type;
+    void *privdata;
+    dictht ht[2];
+    long rehashidx; /* rehashing not in progress if rehashidx == -1 */
+    int iterators; /* number of iterators currently running */
+} dict;</code></pre>
+
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; dictEntry<span style="font-family:宋体,SimSun">是</span>key-value<span style="font-family:宋体,SimSun">中</span>value<span style="font-family:宋体,SimSun">的存储节点，其中存储了</span>key<span style="font-family:宋体,SimSun">、</span>v<span style="font-family:宋体,SimSun">和</span>next<span style="font-family:宋体,SimSun">，</span>next<span style="font-family:宋体,SimSun">指向下一个节点用于解决</span>hash<span style="font-family:宋体,SimSun">冲突</span></p>
+
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; dictType<span style="font-family:宋体,SimSun">定义了一组函数指针用来指定</span>hash<span style="font-family:宋体,SimSun">算法、比较、复制和销毁等方法。</span></p>
+
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; dictht<span style="font-family:宋体,SimSun">定义了一个哈希表，其中</span>size<span style="font-family:宋体,SimSun">是哈希表数组的大小，</span>sizemask<span style="font-family:宋体,SimSun">用于和</span>hash<span style="font-family:宋体,SimSun">函数一同计算一个</span>key-value<span style="font-family:宋体,SimSun">对在数组中的索引位置。</span>used<span style="font-family:宋体,SimSun">记录保存的</span>key-value<span style="font-family:宋体,SimSun">对的数量。</span></p>
+
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; dict<span style="font-family:宋体,SimSun">中包含两个哈希表</span>dictht<span style="font-family:宋体,SimSun">，当进行</span>rehash<span style="font-family:宋体,SimSun">操作时会用到</span>ht[1]<span style="font-family:宋体,SimSun">，由</span>rehashidx<span style="font-family:宋体,SimSun">记录当前</span>rehash<span style="font-family:宋体,SimSun">的进度，这个进度即</span>hash<span style="font-family:宋体,SimSun">数组的索引号，如果没有</span>rehash<span style="font-family:宋体,SimSun">操作则</span>rehashidx<span style="font-family:宋体,SimSun">的值为</span>-1<span style="font-family:宋体,SimSun">。</span></p>
+
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; rehash<span style="font-family:宋体,SimSun">操作：随着对</span>redis<span style="font-family:宋体,SimSun">的操作，会有大量的数据加入到</span>hash<span style="font-family:宋体,SimSun">表中。遇到这情况都会进行</span>rehash<span style="font-family:宋体,SimSun">操作，重新确定</span>hash<span style="font-family:宋体,SimSun">数组的大小，放置键值对数据。触发</span>rehash<span style="font-family:宋体,SimSun">操作是由一个负载因子</span>(load factor)<span style="font-family:宋体,SimSun">决定的，计算方法也比较简单：</span>load factor = used / size<span style="font-family:宋体,SimSun">。</span></p>
+
+<p>rehash<span style="font-family:宋体,SimSun">的过程如下：</span></p>
+
+<ol>
+	<li>
+	<p><span style="font-family:宋体,SimSun">为</span>ht[1]<span style="font-family:宋体,SimSun">分配空间</span></p>
+	</li>
+	<li>
+	<p><span style="font-family:宋体,SimSun">将</span>ht[0]<span style="font-family:宋体,SimSun">的数据迁移到</span>ht[1]</p>
+	</li>
+	<li>
+	<p><span style="font-family:宋体,SimSun">清空</span>ht[0]<span style="font-family:宋体,SimSun">，交换</span>ht[0]<span style="font-family:宋体,SimSun">和</span>ht[1]<span style="font-family:宋体,SimSun">的指针</span></p>
+	</li>
+</ol>
+
+<p><span style="font-family:宋体,SimSun">可以看到最终结果数据还是在</span>ht[0]<span style="font-family:宋体,SimSun">中访问。</span></p>
+
+<p>&nbsp;</p>
+
+<p>rehash<span style="font-family:宋体,SimSun">分两种：</span></p>
+
+<p><span style="font-family:宋体,SimSun">自然</span>rehash<span style="font-family:宋体,SimSun">：需满足</span>used/size &gt;= 1 &amp;&amp; dict_can_resize<span style="font-family:宋体,SimSun">条件时触发（</span>dict_can_resize<span style="font-family:宋体,SimSun">表示目前没有执行</span>BGSAVE<span style="font-family:宋体,SimSun">或</span>BGREWRITEAOF<span style="font-family:宋体,SimSun">命令）</span></p>
+
+<p><span style="font-family:宋体,SimSun">强制</span>rehash<span style="font-family:宋体,SimSun">：需满足</span>load factor&gt;dict_force_resize_ratio(<span style="font-family:宋体,SimSun">默认值为</span>5)<span style="font-family:宋体,SimSun">条件时触发</span></p>
+
+<p><span style="font-family:宋体,SimSun">分配的空间大小根据公式</span>ht[0].used*2 &lt; min(2^n)<span style="font-family:宋体,SimSun">，设置为</span>min(2^n)</p>
+
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; rehash<span style="font-family:宋体,SimSun">过程采用了渐进式</span>rehash<span style="font-family:宋体,SimSun">，主要是为了性能考虑，不能一次将全部或大量的键值对</span>rehash<span style="font-family:宋体,SimSun">到</span>ht[1]<span style="font-family:宋体,SimSun">中，而是每次将一个</span>hash<span style="font-family:宋体,SimSun">数组索引号下的所有键值对</span>rehash<span style="font-family:宋体,SimSun">到</span>ht[1]<span style="font-family:宋体,SimSun">中，下一次</span>rehash<span style="font-family:宋体,SimSun">时再执行下一个索引号，直到所有的索引号全部执行完毕，完成</span>rehash<span style="font-family:宋体,SimSun">操作。在一次渐进式</span>rehash<span style="font-family:宋体,SimSun">中，如果连续发现</span>10<span style="font-family:宋体,SimSun">个索引号下都是空的，则只修改</span>rehashidx<span style="font-family:宋体,SimSun">，退出这次渐进式</span>rehash<span style="font-family:宋体,SimSun">过程，这也是从性能上考虑。</span></p>
+
+<p><span style="font-family:宋体,SimSun">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 另外，</span>dict<span style="font-family:宋体,SimSun">还提供了一个</span>dictRehashMilliseconds<span style="font-family:宋体,SimSun">方法，由服务器常规任务程序执行，这时一次渐进式</span>rehash<span style="font-family:宋体,SimSun">过程处理</span>100<span style="font-family:宋体,SimSun">个索引号，直到耗时大于</span>1ms<span style="font-family:宋体,SimSun">时结束。</span></p>
+
+<p><span style="font-family:宋体,SimSun">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 在</span>rehash<span style="font-family:宋体,SimSun">过程中，当有新节点插入到</span>dict<span style="font-family:宋体,SimSun">中时，会直接插入到</span>ht[1]<span style="font-family:宋体,SimSun">中，而非</span>ht[0]<span style="font-family:宋体,SimSun">中，每次渐进式</span>rehash<span style="font-family:宋体,SimSun">步骤，会把</span>ht[0]<span style="font-family:宋体,SimSun">中的键值对放到</span>ht[1]<span style="font-family:宋体,SimSun">中，因此可知，</span>ht[0].used<span style="font-family:宋体,SimSun">在</span>rehash<span style="font-family:宋体,SimSun">时只减不增，直至为</span>0<span style="font-family:宋体,SimSun">。</span></p>
+
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; dict<span style="font-family:宋体,SimSun">对外提供的接口包括增、删、改、查、创建和销毁等。</span></p>
+
