@@ -1,0 +1,42 @@
+---
+layout : post
+title : (六) Redis的事件驱动模型
+descriptoin : Redis,源码
+category : Redis
+tags : [Redis, 源码, Linux,]
+---
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Redis支持两种事件，文件事件和时间事件。文件事件用于处理socket请求，时间事件则处理一些定时任务和周期性任务。<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Redis基于Reactor模式设计了自己的事件处理器，可以处理文件事件和时间事件。在ae.h和ae.c中分别定义和实现了外部接口。<br />
+在server.c的main函数中有以下核心代码：</p>
+
+<pre>
+<code class="language-cpp">int main(int argc, char **argv) {
+  …
+  aeMain(server.el);
+  …
+}
+</code></pre>
+
+<p><br />
+aeMain函数的实现：</p>
+
+<pre>
+<code class="language-cpp">void aeMain(aeEventLoop *eventLoop) {
+    eventLoop-&gt;stop = 0;
+    while (!eventLoop-&gt;stop) {
+        if (eventLoop-&gt;beforesleep != NULL)
+            eventLoop-&gt;beforesleep(eventLoop);
+        aeProcessEvents(eventLoop, AE_ALL_EVENTS);
+    }
+}</code></pre>
+
+<p><br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 可见，redis的所有操作都当作了事件来处理。<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 至于模型的具体实现，实际是将avport、epoll、kqueue和select封装成了统一的接口，通过ae的外部接口调用。使用多路复用模型的优先级为evport &gt; epoll &gt; kqueue &gt; select<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 以epoll为例，epoll的工作流程如下：</p>
+
+<p><img alt="" src="{{ BASE_PATH }}/pics/redis/epoll.png" /><br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 在redis中封装的epoll中，只有一个线程，用这一个线程处理accept、读和写事件。每次epoll_wait时，把所有的就绪事件存储到aeEventLoop. fired数组中，再逐个处理数组中的事件。我们通常所说的redis是单线程数据库，就是指的这里只有一个线程在处理所有的事件。至于时间事件，可以看到在每次调用aeProcessEvents时，会在处理文件事件后，调用processTimeEvents函数处理时间事件。</p>
+
+<p>&nbsp;</p>
+
