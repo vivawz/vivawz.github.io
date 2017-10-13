@@ -7,6 +7,7 @@ tags : [Redis, 源码, Linux,]
 ---
 <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Redis支持两种事件，文件事件和时间事件。文件事件用于处理socket请求，时间事件则处理一些定时任务和周期性任务。<br />
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Redis基于Reactor模式设计了自己的事件处理器，可以处理文件事件和时间事件。在ae.h和ae.c中分别定义和实现了外部接口。<br />
+<!--more-->
 在server.c的main函数中有以下核心代码：</p>
 
 <pre>
