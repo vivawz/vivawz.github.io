@@ -1,0 +1,107 @@
+---
+layout : post
+title : tcmalloc原理分析
+description : tcmalloc, 源码
+category : opensource
+tags : [tcmalloc ,源码, Linux, ]
+---
+<ol>
+	<li>
+	<p>tcmalloc<span style="font-family:宋体,SimSun">（即</span>Thread-Cache Malloc<span style="font-family:宋体,SimSun">）是一个通用的内存分配器，使用</span>tcmalloc<span style="font-family:宋体,SimSun">只需要在编译的链接阶段加入</span>-ltcmalloc<span style="font-family:宋体,SimSun">，而不是使用</span>glibc<span style="font-family:宋体,SimSun">（</span>ptmalloc2<span style="font-family:宋体,SimSun">），不需要有任何的代码改动。也就是说用户在使用</span>malloc/free<span style="font-family:宋体,SimSun">、</span>new/delete<span style="font-family:宋体,SimSun">时会使用</span>tcmalloc<span style="font-family:宋体,SimSun">进行内存分配。</span></p>
+<!--more-->
+	</li>
+	<li>
+	<p><span style="font-family:宋体,SimSun">为什么要使用</span>tcmalloc</p>
+	</li>
+</ol>
+
+<p><span style="font-family:宋体,SimSun">主要是因为性能，</span>tcmalloc<span style="font-family:宋体,SimSun">能提供更快的申请</span>/<span style="font-family:宋体,SimSun">释放速度，而且内存利用率更高，产生更少的内存碎片</span></p>
+
+<ol start="3">
+	<li>
+	<p><span style="font-family:宋体,SimSun">原理：先上图</span></p>
+	</li>
+</ol>
+
+<p><img alt="" src="{{ BASE_PATH }}/pics/tcmalloc.png" /></p>
+
+<ol>
+	<li>
+	<ol style="list-style-type:lower-alpha">
+		<li>
+		<p><span style="font-family:宋体,SimSun">基本概念：</span></p>
+		</li>
+	</ol>
+	</li>
+</ol>
+
+<p style="margin-left:0.25in">Free List<span style="font-family:宋体,SimSun">：数组链表，链表中保存了内存块</span></p>
+
+<p style="margin-left:0.25in">objects<span style="font-family:宋体,SimSun">：内存块</span></p>
+
+<p style="margin-left:0.25in">Page<span style="font-family:宋体,SimSun">：页内存，内存分隔成大小固定，地址对其的块</span></p>
+
+<p style="margin-left:0.25in">Span<span style="font-family:宋体,SimSun">：</span>tcmalloc<span style="font-family:宋体,SimSun">管理内存的单位，一个</span>Span<span style="font-family:宋体,SimSun">可以包含一个或多个</span>Page</p>
+
+<p style="margin-left:0.25in">Radix Tree<span style="font-family:宋体,SimSun">：基数树，是一种广泛用于内存管理的数据结构，这里用来管理</span>Span</p>
+
+<p style="margin-left:0.25in">&nbsp;</p>
+
+<ol>
+	<li>
+	<ol start="2" style="list-style-type:lower-alpha">
+		<li>
+		<p><span style="font-family:宋体,SimSun">组织结构：</span></p>
+		</li>
+	</ol>
+	</li>
+</ol>
+
+<p style="margin-left:0.25in">tcmalloc<span style="font-family:宋体,SimSun">以</span>256k<span style="font-family:宋体,SimSun">为界将内存分成大块内存和小块内存，使用不同的策略分别对这两种内存进行管理。从图中可以看到，</span>tcmalloc<span style="font-family:宋体,SimSun">由若干（线程数）个</span>Thread Cache<span style="font-family:宋体,SimSun">，一个</span>Central Heap<span style="font-family:宋体,SimSun">和一个</span>Page Heap<span style="font-family:宋体,SimSun">组成。这三种结构中都包含一个数组，而数组的元素是一个链表。数组链表是</span>tcmalloc<span style="font-family:宋体,SimSun">管理内存的主要数据结构之一。三者所不同的是，</span>Thread Cache<span style="font-family:宋体,SimSun">的链表（</span>FreeList<span style="font-family:宋体,SimSun">）内容是</span>object<span style="font-family:宋体,SimSun">，是被切分的小的内存块；</span>Central Heap<span style="font-family:宋体,SimSun">（</span>FreeList<span style="font-family:宋体,SimSun">）和</span>Page Heap<span style="font-family:宋体,SimSun">（</span>SpanList<span style="font-family:宋体,SimSun">）的链表内容是</span>Span<span style="font-family:宋体,SimSun">，但</span>Central Heap<span style="font-family:宋体,SimSun">的</span>Span<span style="font-family:宋体,SimSun">中又有切分的</span>object<span style="font-family:宋体,SimSun">。</span></p>
+
+<ol>
+	<li>
+	<ol start="3" style="list-style-type:lower-alpha">
+		<li>
+		<p><span style="font-family:宋体,SimSun">小内存的分配策略</span></p>
+		</li>
+	</ol>
+	</li>
+</ol>
+
+<p><span style="font-family:宋体,SimSun">小内存的管理由两部分构成：</span>Thread Cache<span style="font-family:宋体,SimSun">和</span>Central Heap<span style="font-family:宋体,SimSun">。其中</span>Thread Cache<span style="font-family:宋体,SimSun">是线程本地</span>Cache<span style="font-family:宋体,SimSun">，每个线程一个；</span>Central Heap<span style="font-family:宋体,SimSun">则由所有线程共享。</span></p>
+
+<p><span style="font-family:宋体,SimSun">当一个线程申请内存时，首先响应的是</span>Thread Cache<span style="font-family:宋体,SimSun">，如果其中有足够大的内存满足要求，可直接返回。只有当内存不够时，需要向</span>Central Heap<span style="font-family:宋体,SimSun">申请，此时使用了一个细粒度的自旋锁来保证线程安全。如果</span>Central Heap<span style="font-family:宋体,SimSun">没有足够内存该怎么办呢，后面会讲到具体策略。</span></p>
+
+<p>&nbsp;</p>
+
+<p><span style="font-family:宋体,SimSun">由上可知，小内存的分配在大部分情况下都是预分配好的，可以拿来即用，只有在本地</span>Cache<span style="font-family:宋体,SimSun">不足的情况才需要加锁，因此效率很高。</span></p>
+
+<ol>
+	<li>
+	<ol start="4" style="list-style-type:lower-alpha">
+		<li>
+		<p><span style="font-family:宋体,SimSun">大内存的分配策略</span></p>
+		</li>
+	</ol>
+	</li>
+</ol>
+
+<p><span style="font-family:宋体,SimSun">大内存通过</span>Page Heap<span style="font-family:宋体,SimSun">来管理内存，策略与小内存相似，也是预分配好一个数组链表，不同的是</span>Page Heap<span style="font-family:宋体,SimSun">只有一个，而且实际上</span>Central Heap<span style="font-family:宋体,SimSun">的</span>Span<span style="font-family:宋体,SimSun">也是从</span>Page Heap<span style="font-family:宋体,SimSun">上分配出去的。</span></p>
+
+<p>Page Heap<span style="font-family:宋体,SimSun">的数组共</span>256<span style="font-family:宋体,SimSun">项，每项中的</span>Span<span style="font-family:宋体,SimSun">依次包含</span>1-255<span style="font-family:宋体,SimSun">个</span>Page<span style="font-family:宋体,SimSun">，最后一项的</span>Span<span style="font-family:宋体,SimSun">包含大于等于</span>256<span style="font-family:宋体,SimSun">个</span>Page<span style="font-family:宋体,SimSun">。当数组中的第</span>k<span style="font-family:宋体,SimSun">项已经没有</span>Span<span style="font-family:宋体,SimSun">时，可以从第</span>k+1<span style="font-family:宋体,SimSun">项拿一个</span>Span<span style="font-family:宋体,SimSun">，将这个</span>Span<span style="font-family:宋体,SimSun">拆成一个包含</span>k<span style="font-family:宋体,SimSun">个</span>Page<span style="font-family:宋体,SimSun">的</span>Span<span style="font-family:宋体,SimSun">提供给申请者，一个包含</span>1<span style="font-family:宋体,SimSun">项的</span>Span<span style="font-family:宋体,SimSun">放到数组的第</span>1<span style="font-family:宋体,SimSun">项中。如果第</span>k+1<span style="font-family:宋体,SimSun">项同样没有</span>Span<span style="font-family:宋体,SimSun">则继续项第</span>k+2<span style="font-family:宋体,SimSun">项申请，依次类推。</span></p>
+
+<ol>
+	<li>
+	<ol start="5" style="list-style-type:lower-alpha">
+		<li>
+		<p><span style="font-family:宋体,SimSun">内存回收</span></p>
+		</li>
+	</ol>
+	</li>
+</ol>
+
+<p><span style="font-family:宋体,SimSun">待续</span></p>
+
+<p style="margin-left:0.25in">&nbsp;</p>
+
