@@ -39,7 +39,7 @@ tags : [tcmalloc ,源码, Linux, ]
 
 <p style="margin-left:0.25in">objects<span style="font-family:宋体,SimSun">：内存块</span></p>
 
-<p style="margin-left:0.25in">Page<span style="font-family:宋体,SimSun">：页内存，内存分隔成大小固定，地址对其的块</span></p>
+<p style="margin-left:0.25in">Page<span style="font-family:宋体,SimSun">：页内存，内存分隔成大小固定，地址对齐的块</span></p>
 
 <p style="margin-left:0.25in">Span<span style="font-family:宋体,SimSun">：</span>tcmalloc<span style="font-family:宋体,SimSun">管理内存的单位，一个</span>Span<span style="font-family:宋体,SimSun">可以包含一个或多个</span>Page</p>
 
@@ -101,7 +101,13 @@ tags : [tcmalloc ,源码, Linux, ]
 	</li>
 </ol>
 
-<p><span style="font-family:宋体,SimSun">待续</span></p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 当释放一个内存对象时，需要先根据地址计算出页号，再在Radix Tree中找到页号对应的Span，根据Span确定是小内存还是大内存对象。<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 如果是小内存，需要把它插入内存本地的FreeList中，如果线程本地内存cache超过阈值（默认2MB），会使用策略将部分未使用的内存块移动到Central Heap中，此时放到了central cache中的tc_slots_中，而不是直接放入Span中，只有当tc_slots_满了，才会归还到Span中，这样的好处是在Thread Cache和Central Heap中又加入了一层缓存使效率更高。<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 如果是大内存，还要获取这个Span页的前一页和后一页是否空闲，如果都不空闲，则直接将这个Span放入SpanList合适的位置，如果这个Span的前一页或后一页存在空闲，还需要将这个Span与前面或后面的Span合并后再把新的Span放入合适的SpanList中。例如，Span1包含[m, n-1]页,Span2包含[n, k-1]页,Span3包含[k, s]页，此时回收了Span2，如果检查发现第n-1页空闲，第k页非空闲，此时需要将Span1和Span2合并成一个包含[m, k-1]页的新Span，而如果第n-1页和第k页都空闲的话，则合并后的新Span应包含[m,s]页。<br />
+4.&nbsp;&nbsp; &nbsp;后记<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 使用tcmalloc后，不必再费尽心思去在代码中设计内存池，而且使用时不需要包含任何头文件，只需要在链接环节使用-ltcmalloc代替glibc即可，这是作为一款通用内存管理器的便捷之处。同时在效率上可以得到数倍的提升。<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 其实tcmalloc中还有很多细节值得研究，我们应该学习其中优秀的编程思想，同时也希望通过以上分析对理解tcmalloc有所帮助。</p>
+<p>&nbsp;</p>
 
 <p style="margin-left:0.25in">&nbsp;</p>
 
